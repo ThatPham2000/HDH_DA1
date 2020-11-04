@@ -27,8 +27,14 @@
 
 void ShowHistory()
 {
+	history[strlen(history) - 1] = '\0';
+	int i;
+	for(i = 0; i < strlen(history) - 1; i++)
+	{
+		history[i] = history[i + 1];
+	}
+	history[strlen(history) - 1] = '\0';
 	printf("%s\n", history);
-	//printf("history nha");
 }
 
 /**
@@ -648,9 +654,9 @@ int main(int argc, char *argv[], char ** envp) {
 		//	} 
 		//}
 		
-		char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
+		char* temp = (char*)malloc(strlen(history) + strlen(linetemp));
 		strcpy(temp, history);
-		strcat(temp , "\n");
+		//strcat(temp , "\n");
 		strcat(temp , linetemp);
 		history = (char*)malloc(strlen(temp));
 		strcpy(history, temp);
