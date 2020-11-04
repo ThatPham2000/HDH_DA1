@@ -1,4 +1,4 @@
-/*
+﻿/*
   * simple-c-shell.c
   * 
   * Copyright (c) 2013 Juan Manuel Reyes
@@ -17,38 +17,38 @@
   * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <termios.h>
+
 #include "util.h"
 
-#define LIMIT 256 // max number of tokens for a command
-#define MAXLINE 1024 // max number of characters from user input
+#define LIMIT 256 // Số lượng token lớn nhất cho command
+#define MAXLINE 1024 // số lượng kí tự lớn nhất được người dùng nhập
+
+
+
+void ShowHistory()
+{
+	printf("%s\n", history);
+	//printf("history nha");
+}
 
 /**
- * Function used to initialize our shell. We used the approach explained in
+ * Hàm tạo shell. Cách tiếp cận được giải thích ở
  * http://www.gnu.org/software/libc/manual/html_node/Initializing-the-Shell.html
  */
 void init(){
 		// See if we are running interactively
         GBSH_PID = getpid();
-        // The shell is interactive if STDIN is the terminal  
+        // kiểm tra xem bộ mô tả tệp có tham chiếu đến terminal hay không
         GBSH_IS_INTERACTIVE = isatty(STDIN_FILENO);  
 
 		if (GBSH_IS_INTERACTIVE) {
-			// Loop until we are in the foreground
+			// Vòng lặp cho đến khi chúng ta ở foreground
 			while (tcgetpgrp(STDIN_FILENO) != (GBSH_PGID = getpgrp()))
 					kill(GBSH_PID, SIGTTIN);             
 	              
 	              
 	        // Set the signal handlers for SIGCHILD and SIGINT
-			act_child.sa_handler = signalHandler_child;
+			act_child.sa_handler = signalHandler_child;		//sửa thành SIGCHLD
 			act_int.sa_handler = signalHandler_int;			
 			
 			/**The sigaction structure is defined as something like
@@ -62,6 +62,7 @@ void init(){
 				
 			}*/
 			
+			//sigaction: được sử dụng để thay đổi hành động được thực hiện bởi một quá trình khi nhận được một tín hiệu cụ thể.
 			sigaction(SIGCHLD, &act_child, 0);
 			sigaction(SIGINT, &act_int, 0);
 			
@@ -70,32 +71,30 @@ void init(){
 			GBSH_PGID = getpgrp();
 			if (GBSH_PID != GBSH_PGID) {
 					printf("Error, the shell is not process group leader");
-					exit(EXIT_FAILURE);
+					exit(EXIT_FAILURE);	//EXIT_FAILURE is 8
 			}
-			// Grab control of the terminal
+			// giữ quyền kiểm soát terminal
 			tcsetpgrp(STDIN_FILENO, GBSH_PGID);  
 			
-			// Save default terminal attributes for shell
+			// Lưu thuộc tính terminal mặc định cho shell
 			tcgetattr(STDIN_FILENO, &GBSH_TMODES);
 
-			// Get the current directory that will be used in different methods
+			// Lấy thư mục hiện tại sẽ được sử dụng trong các phương thức khác
 			currentDirectory = (char*) calloc(1024, sizeof(char));
-        } else {
-                printf("Could not make the shell interactive.\n");
+        } 
+		else 	//khong phai terminal
+		{
+                printf("COULD NOT MAKE THE SHELL INTERACTIVE.\n");
                 exit(EXIT_FAILURE);
         }
 }
 
-/**
- * Method used to print the welcome screen of our shell
- */
+//welcomeScreen
 void welcomeScreen(){
-        printf("\n\t============================================\n");
-        printf("\t               Simple C Shell\n");
-        printf("\t--------------------------------------------\n");
-        printf("\t             Licensed under GPLv3:\n");
-        printf("\t============================================\n");
-        printf("\n\n");
+        printf("\n============================================\n");
+        printf(  "|     OUR SHELL - THAT - TUONG - TUNG      |\n");
+		printf("============================================\n");
+        printf("\n");
 }
 
 /**
@@ -106,10 +105,10 @@ void welcomeScreen(){
  * signal handler for SIGCHLD
  */
 void signalHandler_child(int p){
-	/* Wait for all dead processes.
-	 * We use a non-blocking call (WNOHANG) to be sure this signal handler will not
-	 * block if a child was cleaned up in another part of the program. */
-	while (waitpid(-1, NULL, WNOHANG) > 0) {
+	// Chờ cho tất cả các process chết.
+	/* 	Sử dụng non-blocking call (WNOHANG) để trình xử lý tín hiệu sẽ không chặn
+		nếu child được cleaned up trong phần khác của chương trình.	*/
+	while (waitpid(-1, NULL, WNOHANG) > 0){
 	}
 	printf("\n");
 }
@@ -118,8 +117,8 @@ void signalHandler_child(int p){
  * Signal handler for SIGINT
  */
 void signalHandler_int(int p){
-	// We send a SIGTERM signal to the child process
-	if (kill(pid,SIGTERM) == 0){
+	// Gửi một tín hiệu SIGTERM đến process con
+	if (kill(pid,SIGTERM) == 0){		//SIGTERM yêu cầu kết thúc một cách lịch sự
 		printf("\nProcess %d received a SIGINT signal\n",pid);
 		no_reprint_prmpt = 1;			
 	}else{
@@ -128,26 +127,23 @@ void signalHandler_int(int p){
 }
 
 /**
- *	Displays the prompt for the shell
+ *	Hiển thị lời nhắc cho shell
  */
 void shellPrompt(){
-	// We print the prompt in the form "<user>@<host> <cwd> >"
-	char hostn[1204] = "";
-	gethostname(hostn, sizeof(hostn));
-	printf("%s@%s %s > ", getenv("LOGNAME"), hostn, getcwd(currentDirectory, 1024));
+	//in lời nhắc là đường dẫn hiện tại
+	printf("%s > ", getcwd(currentDirectory, 1024));
 }
 
-/**
- * Method to change directory
- */
+///
+///Method to change directory
+///
 int changeDirectory(char* args[]){
-	// If we write no path (only 'cd'), then go to the home directory
+	// nếu không nhập đường dẫn mà chỉ gõ 'cd' thôi thì sẽ đến thư mục home/sv
 	if (args[1] == NULL) {
 		chdir(getenv("HOME")); 
 		return 1;
 	}
-	// Else we change the directory to the one specified by the 
-	// argument, if possible
+	// ngược lại sẽ thay đổi thư mục được chỉ định nếu có thể
 	else{ 
 		if (chdir(args[1]) == -1) {
 			printf(" %s: no such directory\n", args[1]);
@@ -157,10 +153,9 @@ int changeDirectory(char* args[]){
 	return 0;
 }
 
-/**
- * Method used to manage the environment variables with different
- * options
- */ 
+///
+///phương thức được sử dụng để quản lý các biến môi trường với những lựa chọn khác nhau
+///
 int manageEnviron(char * args[], int option){
 	char **env_aux;
 	switch(option){
@@ -456,9 +451,9 @@ int commandHandler(char * args[]){
 	
 	char *args_aux[256];
 	
-	// We look for the special characters and separate the command itself
-	// in a new array for the arguments
-	while ( args[j] != NULL){
+	// Tìm kiếm kí tự đặc biệt và tách lệnh thành các mảng các đối số mới
+	while ( args[j] != NULL)
+	{
 		if ( (strcmp(args[j],">") == 0) || (strcmp(args[j],"<") == 0) || (strcmp(args[j],"&") == 0)){
 			break;
 		}
@@ -466,14 +461,21 @@ int commandHandler(char * args[]){
 		j++;
 	}
 	
-	// 'exit' command quits the shell
-	if(strcmp(args[0],"exit") == 0) exit(0);
-	// 'pwd' command prints the current directory
- 	else if (strcmp(args[0],"pwd") == 0){
-		if (args[j] != NULL){
-			// If we want file output
-			if ( (strcmp(args[j],">") == 0) && (args[j+1] != NULL) ){
-				fileDescriptor = open(args[j+1], O_CREAT | O_TRUNC | O_WRONLY, 0600); 
+	// thoát shell khi nhập exit
+	if(strcmp(args[0],"exit") == 0) 
+	{
+		exit(0);
+	}
+	
+	// In thư mục hiện tại khi người dùng nhập pwd
+ 	else if (strcmp(args[0],"pwd") == 0)
+	{
+		if (args[j] != NULL)
+		{
+			// Xuất ra file output
+			if ( (strcmp(args[j],">") == 0) && (args[j+1] != NULL) )
+			{
+				fileDescriptor = open(args[j+1], O_CREAT | O_TRUNC | O_WRONLY, 0600);	//pipe ghi: open(const char *pathname, int flags, mode_t mode);
 				// We replace de standard output with the appropriate file
 				standardOut = dup(STDOUT_FILENO); 	// first we make a copy of stdout
 													// because we'll want it back
@@ -486,19 +488,22 @@ int commandHandler(char * args[]){
 			printf("%s\n", getcwd(currentDirectory, 1024));
 		}
 	} 
- 	// 'clear' command clears the screen
+ 	// Nhấn nút clear xóa màn hình
 	else if (strcmp(args[0],"clear") == 0) system("clear");
-	// 'cd' command to change directory
+	
+	// nhấn cd thay đổi thư mục
 	else if (strcmp(args[0],"cd") == 0) changeDirectory(args);
-	// 'environ' command to list the environment variables
+	
+	// lệnh environ để liệt kê các biến môi trường
 	else if (strcmp(args[0],"environ") == 0){
 		if (args[j] != NULL){
-			// If we want file output
+			// Nếu muốn xuất file
 			if ( (strcmp(args[j],">") == 0) && (args[j+1] != NULL) ){
 				fileDescriptor = open(args[j+1], O_CREAT | O_TRUNC | O_WRONLY, 0600); 
-				// We replace de standard output with the appropriate file
-				standardOut = dup(STDOUT_FILENO); 	// first we make a copy of stdout
-													// because we'll want it back
+				
+				// Thay thế standard output bằng file thích hợp
+				standardOut = dup(STDOUT_FILENO); 	// đầu tiên tạo một bản sao của stdout
+													// bởi vì chúng tôi sẽ muốn nó trở lại
 				dup2(fileDescriptor, STDOUT_FILENO); 
 				close(fileDescriptor);
 				manageEnviron(args,0);
@@ -508,10 +513,20 @@ int commandHandler(char * args[]){
 			manageEnviron(args,0);
 		}
 	}
-	// 'setenv' command to set environment variables
-	else if (strcmp(args[0],"setenv") == 0) manageEnviron(args,1);
-	// 'unsetenv' command to undefine environment variables
-	else if (strcmp(args[0],"unsetenv") == 0) manageEnviron(args,2);
+	
+	// lệnh setenv cài đặt biến môi trường
+	else if (strcmp(args[0],"setenv") == 0) 
+		manageEnviron(args,1);
+	
+	// lệnh unsetenv để hủy xác định các biến môi trường
+	else if (strcmp(args[0],"unsetenv") == 0) 
+		manageEnviron(args,2);
+	
+	else if (strcmp(args[0],"history") == 0)
+	{
+		ShowHistory();
+	}
+	
 	else{
 		// If none of the preceding commands were used, we invoke the
 		// specified program. We have to detect if I/O redirection,
@@ -572,55 +587,73 @@ int commandHandler(char * args[]){
 		//		i++;
 		//	}
 	}
-return 1;
+	
+	return 1;
 }
 
 
 /**
-* Main method of our shell
+* Hàm main
 */ 
 int main(int argc, char *argv[], char ** envp) {
-	char line[MAXLINE]; // buffer for the user input
-	char * tokens[LIMIT]; // array for the different tokens in the command
+	char line[MAXLINE]; // buffer cho the user input
+	char * tokens[LIMIT]; // mảng các token trong command
 	int numTokens;
 		
-	no_reprint_prmpt = 0; 	// to prevent the printing of the shell
-							// after certain methods
-	pid = -10; // we initialize pid to an pid that is not possible
+	no_reprint_prmpt = 0; 	//Ngăn chặn việc in các shell sau phương thức certain
+	pid = -10; // khởi tạo pid thành một pid không thể thực hiện được
 	
-	// We call the method of initialization and the welcome screen
+	// Gọi hàm khởi tạo và chào mừng
 	init();
 	welcomeScreen();
     
-    // We set our extern char** environ to the environment, so that
-    // we can treat it later in other methods
+    // đặt char ** bên ngoài của mình thành môi trường để chúng tôi có thể xử lý nó sau này bằng các phương pháp khác
 	environ = envp;
 	
-	// We set shell=<pathname>/simple-c-shell as an environment variable for
+	// set shell=<pathname>/simple-c-shell as an environment variable for
 	// the child
 	setenv("shell",getcwd(currentDirectory, 1024),1);
 	
-	// Main loop, where the user input will be read and the prompt
-	// will be printed
+	// Main loop, user input sẽ được đọc
+	// và lời nhắc sẽ được in
 	while(TRUE){
-		// We print the shell prompt if necessary
-		if (no_reprint_prmpt == 0) shellPrompt();
+		// in lời nhắc của shell nếu cần thiết
+		if (no_reprint_prmpt == 0) 
+			shellPrompt();
 		no_reprint_prmpt = 0;
 		
-		// We empty the line buffer
+		// làm rỗng line buffer ==> chèn 1024 \0 vào line, bắt đầu từ phần tử thứ nhất, đảm bảo chuỗi ban đầu là rỗng
 		memset ( line, '\0', MAXLINE );
 
-		// We wait for user input
+		// Chờ user input
 		fgets(line, MAXLINE, stdin);
-	
-		// If nothing is written, the loop is executed again
+		char* linetemp = (char*)malloc(MAXLINE);
+		strcpy(linetemp,line);
+		// Nếu không viết gì, vòng lặp chạy lại
 		if((tokens[0] = strtok(line," \n\t")) == NULL) continue;
 		
-		// We read all the tokens of the input and pass it to our
-		// commandHandler as the argument
+		// Đọc tất cả tokens của input 
+		// Chuyển đến commandHandler làm đối số
 		numTokens = 1;
 		while((tokens[numTokens] = strtok(NULL, " \n\t")) != NULL) numTokens++;
+
+		//char* linetemp = (char*)malloc(MAXLINE);
+		//strcpy(linetemp, tokens[0]);
+		//if(numTokens > 1)
+		//{
+		//	int i;
+		//	for(i = 1; i < numTokens; i++)
+		//	{
+		//		strcat(linetemp, tokens[i]);
+		//	} 
+		//}
 		
+		char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
+		strcpy(temp, history);
+		strcat(temp , "\n");
+		strcat(temp , linetemp);
+		history = (char*)malloc(strlen(temp));
+		strcpy(history, temp);
 		commandHandler(tokens);
 		
 	}          
