@@ -5,10 +5,6 @@
 
 void ShowHistory()
 {
-	if(strcmp(history, "") == 0)
-	{
-		printf("No commands in history\n");
-	}
 	printf("%s", history);
 }
 
@@ -122,7 +118,8 @@ void shellPrompt()
 ///
 ///Method to change directory
 ///
-int changeDirectory(char* args[]){
+int changeDirectory(char* args[])
+{
 	// nếu không nhập đường dẫn mà chỉ gõ 'cd' thôi thì sẽ đến thư mục home/sv/... (noi goi terminal)
 	if (args[1] == NULL) 
 	{
@@ -454,22 +451,22 @@ int commandHandler(char * args[])
 	// In thư mục hiện tại khi người dùng nhập pwd
  	else if (strcmp(args[0],"pwd") == 0)
 	{
-		if (args[j] != NULL)
+		if (args[j] != NULL) //kiem tra neu la pwd > *.txt (example)
 		{
 			// Xuất ra file output
 			if ( (strcmp(args[j],">") == 0) && (args[j+1] != NULL) )
 			{
-				fileDescriptor = open(args[j+1], O_CREAT | O_TRUNC | O_WRONLY, 0600);	//pipe ghi: open(const char *pathname, int flags, mode_t mode);
+				fileDescriptor = open(args[j+1], O_CREAT | O_TRUNC | O_WRONLY, 0600);//pipe ghi: open(const char *pathname, int flags, mode_t mode);
 				// We replace de standard output with the appropriate file
 				standardOut = dup(STDOUT_FILENO); 	// first we make a copy of stdout
-													// because we'll want it back
+									// because we'll want it back
 				dup2(fileDescriptor, STDOUT_FILENO); 
 				close(fileDescriptor);
 				printf("%s\n", getcwd(currentDirectory, 1024));
 				dup2(standardOut, STDOUT_FILENO);
 			}
 		}
-		else
+		else	//chi pwd
 		{
 			printf("%s\n", getcwd(currentDirectory, 1024));
 		}
@@ -487,27 +484,22 @@ int commandHandler(char * args[])
 	
 	else
 	{
-		// If none of the preceding commands were used, we invoke the
-		// specified program. We have to detect if I/O redirection,
-		// piped execution or background execution were solicited
+		// Nếu không có lệnh nào trước đó được sử dụng, gọi chương trình đã chỉ định. Tìm xem I/O redirection, thực thi đường ống hoặc thực thi nền
 		while (args[i] != NULL && background == 0)
 		{
-			// If background execution was solicited (last argument '&')
-			// we exit the loop
+			// Neu thuc thi nen (doi so cuoi cung la '&')
+			// Thoat vong lap
 			if (strcmp(args[i],"&") == 0)
 			{
 				background = 1;
-			// If '|' is detected, piping was solicited, and we call
-			// the appropriate method that will handle the different
-			// executions
+			// Neu la '|', piping, goi phuong thuc phu hop de xu ly
 			}
 			else if (strcmp(args[i],"|") == 0)
 			{
 				pipeHandler(args);
 				return 1;
-			// If '<' is detected, we have Input and Output redirection.
-			// First we check if the structure given is the correct one,
-			// and if that is the case we call the appropriate method
+			// Neu la '<', Input and Output redirection.
+			// Kiểm tra xem cấu trúc đã cho có đúng không, thi gọi phương thức thích hợp
 			}
 			else if (strcmp(args[i],"<") == 0)
 			{
@@ -528,9 +520,8 @@ int commandHandler(char * args[])
 				fileIO(args_aux,args[i+1],args[i+3],1);
 				return 1;
 			}
-			// If '>' is detected, we have output redirection.
-			// First we check if the structure given is the correct one,
-			// and if that is the case we call the appropriate method
+			// Neu la '>', la output redirection.
+			// Kiểm tra xem cấu trúc đã cho có đúng không, thi gọi phương thức thích hợp
 			else if (strcmp(args[i],">") == 0)
 			{
 				if (args[i+1] == NULL)
@@ -543,8 +534,8 @@ int commandHandler(char * args[])
 			}
 			i++;
 		}
-		// We launch the program with our method, indicating if we
-		// want background execution or not
+		
+		// Khởi chạy chương trình với phương thức, có muốn thực thi nền hay không
 		args_aux[i] = NULL;
 		launchProg(args_aux,background);
 		
@@ -557,7 +548,7 @@ int commandHandler(char * args[])
 /**
 * Hàm main
 */ 
-int main(int argc, char *argv[], char ** envp) 
+int main(int argc, char *argv[])//, char ** envp) 
 {
 	char line[MAXLINE]; // buffer cho the user input
 	char * tokens[LIMIT]; // mảng các token trong command
@@ -573,8 +564,7 @@ int main(int argc, char *argv[], char ** envp)
 	init();
 	//welcomeScreen();
     
-    // đặt char ** bên ngoài của mình thành môi trường để chúng tôi có thể xử lý nó sau này bằng các phương pháp khác
-	environ = envp;
+   	// đặt char ** bên ngoài của mình thành môi trường để chúng tôi có thể xử lý nó sau này bằng các phương pháp khác
 	
 	// set shell=<pathname>/simple-c-shell as an environment variable for
 	// the child
@@ -593,13 +583,24 @@ int main(int argc, char *argv[], char ** envp)
 		memset ( line, '\0', MAXLINE );
 
 		// Chờ user input
-		fgets(line, MAXLINE, stdin);
+		fgets(line, MAXLINE, stdin);	//line da bao gom dau xuong dong
 		char* linetemp = (char*)malloc(strlen(line) + 1);
 		strcpy(linetemp,line);
-
+		
+		line[strlen(line) -1] = '\0';
+		
 		if(strcmp(line,"!!") == 0)
 		{
-			strcpy(line, beforehistory);
+			if(strcmp(beforehistory,"") == 0)
+			{
+				printf("No commands in history\n");
+			}
+			else
+			{
+				strcpy(line, beforehistory);
+				printf("%s", line);
+				
+			}
 		}
 
 		// Nếu không viết gì, vòng lặp chạy lại
@@ -607,6 +608,7 @@ int main(int argc, char *argv[], char ** envp)
 		
 		// Đọc tất cả tokens của input 
 		// Chuyển đến commandHandler làm đối số
+
 		numTokens = 1;
 		while((tokens[numTokens] = strtok(NULL, " \n\t")) != NULL) 
 		{
@@ -615,15 +617,19 @@ int main(int argc, char *argv[], char ** envp)
 
 		if(strcmp(beforehistory, linetemp) != 0)
 		{
-			beforehistory = (char*)malloc(strlen(linetemp));
-			strcpy(beforehistory, linetemp);
+			if(strcmp(linetemp, "!!\n") != 0)
+			{
+				beforehistory = (char*)malloc(strlen(linetemp));
+				strcpy(beforehistory, linetemp);
+				char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
+				strcpy(temp, history);
+				//strcat(temp , "\n");
+				strcat(temp , linetemp);
+				history = (char*)malloc(strlen(temp) + 1);
+				strcpy(history, temp);
+			}
 
-			char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
-			strcpy(temp, history);
-			//strcat(temp , "\n");
-			strcat(temp , linetemp);
-			history = (char*)malloc(strlen(temp) + 1);
-			strcpy(history, temp);
+			
 		}
 
 		
