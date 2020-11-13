@@ -1,20 +1,104 @@
-﻿#include "util.h"
+﻿#include "myshell.h"
 
 #define LIMIT 256 // Số lượng token lớn nhất cho command
 #define MAXLINE 1024 // số lượng kí tự lớn nhất được người dùng nhập
+
+// Hàm main
+int main(int argc, char *argv[]) 
+{
+	int numTokens;
+	char line[MAXLINE]; // buffer cho the user input
+	char * tokens[LIMIT]; // mảng các token trong command
+	
+	no_reprint_prmpt = 0; 
+	pid = -10; // khởi tạo pid thành một pid không thể thực hiện được
+
+	//check value before adding to history
+	char* beforehistory = "";
+
+	// Gọi hàm khởi tạo
+	Initiation();
+	
+	// set shell=<pathname>/myshell as an environment variable for the child
+	setenv("shell",getcwd(currentDirectory, 1024),1);
+	
+	// Main loop, user input sẽ được đọc và lời nhắc sẽ được in
+	while(TRUE)
+	{
+		// in lời nhắc của shell nếu cần thiết
+		if (no_reprint_prmpt == 0) 
+			Prompt();
+		no_reprint_prmpt = 0;
+		
+		// làm rỗng line buffer ==> chèn 1024 \0 vào line, bắt đầu từ phần tử thứ nhất, đảm bảo chuỗi ban đầu là rỗng
+		memset ( line, '\0', MAXLINE );
+
+		// Chờ user input
+		fgets(line, MAXLINE, stdin);	//line da bao gom dau xuong dong
+		char* linetemp = (char*)malloc(strlen(line) + 1);
+		strcpy(linetemp,line);
+		
+		line[strlen(line) -1] = '\0';
+		
+		if(strcmp(line,"!!") == 0)
+		{
+			if(strcmp(beforehistory,"") == 0)
+			{
+				printf("No commands in history\n");
+			}
+			else
+			{
+				strcpy(line, beforehistory);
+				printf("%s", line);
+				
+			}
+		}
+
+		// Nếu không viết gì, vòng lặp chạy lại
+		if((tokens[0] = strtok(line," \n\t")) == NULL) continue;
+		
+		// Đọc tất cả tokens của input 
+		// Chuyển đến HandleCommand làm đối số
+
+		numTokens = 1;
+		while((tokens[numTokens] = strtok(NULL, " \n\t")) != NULL) 
+		{
+			numTokens++;
+		}
+
+		if(strcmp(beforehistory, linetemp) != 0)
+		{
+			if(strcmp(linetemp, "!!\n") != 0)
+			{
+				beforehistory = (char*)malloc(strlen(linetemp));
+				strcpy(beforehistory, linetemp);
+				char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
+				strcpy(temp, history);
+				//strcat(temp , "\n");
+				strcat(temp , linetemp);
+				history = (char*)malloc(strlen(temp) + 1);
+				strcpy(history, temp);
+			}
+
+			
+		}
+
+		
+		HandleCommand(tokens);
+		
+	}          
+
+	exit(0);
+}
 
 void ShowHistory()
 {
 	printf("%s", history);
 }
 
-/**
- * Hàm tạo shell. Cách tiếp cận được giải thích ở
- * http://www.gnu.org/software/libc/manual/html_node/Initializing-the-Shell.html
- */
-void init()
+//Ham tao shell
+void Initiation()
 {
-		// See if we are running interactively
         GBSH_PID = getpid();
         // kiểm tra xem bộ mô tả tệp có tham chiếu đến terminal hay không
         GBSH_IS_INTERACTIVE = isatty(STDIN_FILENO);  
@@ -27,32 +111,21 @@ void init()
 					kill(GBSH_PID, SIGTTIN);                
 			}   
 			
-	        // Set the signal handlers for SIGCHILD and SIGINT
-			act_child.sa_handler = signalHandler_child;		//sửa thành SIGCHLD
+	        	// Đặt bộ xử lý tín hiệu cho SIGCHLD và SIGINT
+			act_chld.sa_handler = signalHandler_chld;
 			act_int.sa_handler = signalHandler_int;			
 			
-			/**The sigaction structure is defined as something like
-			
-			struct sigaction {
-				void (*sa_handler)(int);
-				void (*sa_sigaction)(int, siginfo_t *, void *);
-				sigset_t sa_mask;
-				int sa_flags;
-				void (*sa_restorer)(void);
-				
-			}*/
-			
 			//sigaction: được sử dụng để thay đổi hành động được thực hiện bởi một quá trình khi nhận được một tín hiệu cụ thể.
-			sigaction(SIGCHLD, &act_child, 0);
+			sigaction(SIGCHLD, &act_chld, 0);
 			sigaction(SIGINT, &act_int, 0);
 			
 			// Put ourselves in our own process group
-			setpgid(GBSH_PID, GBSH_PID); // we make the shell process the new process group leader
+			setpgid(GBSH_PID, GBSH_PID); // đặt shell process trở thành new process group leader
 			GBSH_PGID = getpgrp();
 			if (GBSH_PID != GBSH_PGID) 
 			{
-					printf("Error, the shell is not process group leader");
-					exit(EXIT_FAILURE);	//EXIT_FAILURE is 8
+				printf("Error, the shell is not process group leader");
+				exit(EXIT_FAILURE);	//EXIT_FAILURE is 8
 			}
 			// giữ quyền kiểm soát terminal
 			tcsetpgrp(STDIN_FILENO, GBSH_PGID);  
@@ -70,18 +143,20 @@ void init()
         }
 }
 
-/**
- * SIGNAL HANDLERS
- */
 
-/**
- * signal handler for SIGCHLD
- */
-void signalHandler_child(int p)
+//Hiển thị lời nhắc cho shell
+void Prompt()
+{
+	//lời nhắc là đường dẫn hiện tại
+	printf("%s%s > ", teamName, getcwd(currentDirectory, 1024));
+}
+
+//signal handler SIGCHLD
+void signalHandler_chld(int p)
 {
 	// Chờ cho tất cả các process chết.
-	/* 	Sử dụng non-blocking call (WNOHANG) để trình xử lý tín hiệu sẽ không chặn
-		nếu child được cleaned up trong phần khác của chương trình.	*/
+	//Sử dụng non-blocking call (WNOHANG) để trình xử lý tín hiệu sẽ không chặn
+	//nếu child được cleaned up trong phần khác của chương trình.
 	while (waitpid(-1, NULL, WNOHANG) > 0)
 	{
 		
@@ -89,9 +164,7 @@ void signalHandler_child(int p)
 	printf("\n");
 }
 
-/**
- * Signal handler for SIGINT
- */
+//signal handler SIGINT
 void signalHandler_int(int p)
 {
 	// Gửi một tín hiệu SIGTERM đến process con
@@ -106,18 +179,7 @@ void signalHandler_int(int p)
 	}
 }
 
-/**
- *	Hiển thị lời nhắc cho shell
- */
-void shellPrompt()
-{
-	//lời nhắc là đường dẫn hiện tại
-	printf("%s%s > ", teamName, getcwd(currentDirectory, 1024));
-}
-
-///
-///Method to change directory
-///
+//Method to change directory
 int changeDirectory(char* args[])
 {
 	// nếu không nhập đường dẫn mà chỉ gõ 'cd' thôi thì sẽ đến thư mục home/sv/... (noi goi terminal)
@@ -140,10 +202,8 @@ int changeDirectory(char* args[])
 
 
  
-/**
-* Method for launching a program. It can be run in the background
-* or in the foreground
-*/ 
+
+//Phuong thuc launching chuong trinh. Co the duoc chay trong background hoac foreground
 void launchProg(char **args, int background)
 {	 
 	 int err = -1;
@@ -156,12 +216,10 @@ void launchProg(char **args, int background)
 	 // pid == 0 implies the following code is related to the child process
 	if(pid==0)
 	{
-		// We set the child to ignore SIGINT signals (we want the parent
-		// process to handle them with signalHandler_int)	
+		// We set the child to ignore SIGINT signals (we want the parent process to handle them with signalHandler_int)	
 		signal(SIGINT, SIG_IGN);
 		
-		// We set parent=<pathname>/simple-c-shell as an environment variable
-		// for the child
+		// We set parent=<pathname>/simple-c-shell as an environment variable for the child
 		setenv("parent",getcwd(currentDirectory, 1024),1);	
 		
 		// If we launch non-existing commands we end the process
@@ -174,25 +232,20 @@ void launchProg(char **args, int background)
 	 
 	 // The following will be executed by the parent
 	 
-	 // If the process is not requested to be in background, we wait for
-	 // the child to finish.
+	 // Neu tien trinh khong yeu cau chay background, thi cho thang con ket thuc.
 	 if (background == 0)
 	 {
 		 waitpid(pid,NULL,0);
 	 }
 	 else
 	 {
-		 // In order to create a background process, the current process
-		 // should just skip the call to wait. The SIGCHILD handler
-		 // signalHandler_child will take care of the returning values
-		 // of the childs.
+		 // In order to create a background process, the current process should just skip the call to wait. 
+		 // The SIGCHILD handler signalHandlerchild will take care of the returning values of the childs.
 		 printf("Process created with PID: %d\n",pid);
 	 }	 
 }
  
-/**
-* Method used to manage I/O redirection
-*/ 
+//Manage I/O redirection
 void fileIO(char * args[], char* inputFile, char* outputFile, int option)
 {
 	 
@@ -215,8 +268,9 @@ void fileIO(char * args[], char* inputFile, char* outputFile, int option)
 			// We replace de standard output with the appropriate file
 			dup2(fileDescriptor, STDOUT_FILENO); 
 			close(fileDescriptor);
-		// Option 1: input and output redirection
+		
 		}
+		// Option 1: input and output redirection
 		else if (option == 1)
 		{
 			// We open file for read only (it's STDIN)
@@ -228,6 +282,15 @@ void fileIO(char * args[], char* inputFile, char* outputFile, int option)
 			fileDescriptor = open(outputFile, O_CREAT | O_TRUNC | O_WRONLY, 0600);
 			dup2(fileDescriptor, STDOUT_FILENO);
 			close(fileDescriptor);		 
+		}
+		// Option 2: input redirection
+		if (option == 2)
+		{
+			// We open file for read only (it's STDIN)
+			fileDescriptor = open(inputFile, O_RDONLY, 0600);  
+			// We replace de standard input with the appropriate file
+			dup2(fileDescriptor, STDIN_FILENO);
+			close(fileDescriptor);
 		}
 		 
 		setenv("parent",getcwd(currentDirectory, 1024),1);
@@ -241,10 +304,8 @@ void fileIO(char * args[], char* inputFile, char* outputFile, int option)
 	waitpid(pid,NULL,0);
 }
 
-/**
-* Method used to manage pipes.
-*/ 
-void pipeHandler(char * args[])
+//Phuong thuc quan ly pipe
+void HandlePipe(char * args[])
 {
 	// File descriptors
 	int filedes[2]; // pos. 0 output, pos. 1 input of the pipe
@@ -259,7 +320,7 @@ void pipeHandler(char * args[])
 	int err = -1;
 	int end = 0;
 	
-	// Variables used for the different loops
+	// Bien su dung cho cac vong lap khac nhau
 	int i = 0;
 	int j = 0;
 	int k = 0;
@@ -275,14 +336,11 @@ void pipeHandler(char * args[])
 	}
 	num_cmds++;
 	
-	// Main loop of this method. For each command between '|', the
-	// pipes will be configured and standard input and/or output will
-	// be replaced. Then it will be executed
+	// For each command between '|', the pipes will be configured and standard input and/or output will be replaced. Then it will be executed
 	while (args[j] != NULL && end != 1)
 	{
 		k = 0;
-		// We use an auxiliary array of pointers to store the command
-		// that will be executed on each iteration
+		// Use an auxiliary array of pointers to store the command that will be executed on each iteration
 		while (strcmp(args[j],"|") != 0)
 		{
 			command[k] = args[j];
@@ -296,16 +354,12 @@ void pipeHandler(char * args[])
 			}
 			k++;
 		}
-		// Last position of the command will be NULL to indicate that
-		// it is its end when we pass it to the exec function
+		// Last position of the command will be NULL to indicate that it is its end when we pass it to the exec function
 		command[k] = NULL;
 		j++;		
 		
-		// Depending on whether we are in an iteration or another, we
-		// will set different descriptors for the pipes inputs and
-		// output. This way, a pipe will be shared between each two
-		// iterations, enabling us to connect the inputs and outputs of
-		// the two different commands.
+		// Depending on whether we are in an iteration or another, we will set different descriptors for the pipes inputs and output.
+		// This way, a pipe will be shared between each two iterations, enabling us to connect the inputs and outputs of the two different commands.
 		if (i % 2 != 0)
 		{
 			pipe(filedes); // for odd i
@@ -339,10 +393,8 @@ void pipeHandler(char * args[])
 			{
 				dup2(filedes2[1], STDOUT_FILENO);
 			}
-			// If we are in the last command, depending on whether it
-			// is placed in an odd or even position, we will replace
-			// the standard input for one pipe or another. The standard
-			// output will be untouched because we want to see the 
+			// If we are in the last command, depending on whether it is placed in an odd or even position,
+			// we will replace the standard input for one pipe or another. The standard output will be untouched because we want to see the 
 			// output in the terminal
 			else if (i == num_cmds - 1)
 			{
@@ -355,14 +407,13 @@ void pipeHandler(char * args[])
 					// for even number of commands
 					dup2(filedes2[0],STDIN_FILENO);
 				}
-			// If we are in a command that is in the middle, we will
-			// have to use two pipes, one for input and another for
-			// output. The position is also important in order to choose
-			// which file descriptor corresponds to each input/output
+			// If we are in a command that is in the middle, we will have to use two pipes, one for input and another for output.
+			// The position is also important in order to choose which file descriptor corresponds to each input/output
 			}
 			else // for odd i
 			{ 
-				if (i % 2 != 0){
+				if (i % 2 != 0)
+				{
 					dup2(filedes2[0],STDIN_FILENO); 
 					dup2(filedes[1],STDOUT_FILENO);
 				}
@@ -415,10 +466,9 @@ void pipeHandler(char * args[])
 	}
 }
 			
-/**
-* Method used to handle the commands entered via the standard input
-*/ 
-int commandHandler(char * args[])
+
+//Phương thuc được sử dụng để xử lý các lệnh được nhập thông qua standard input
+int HandleCommand(char * args[])
 {
 	int i = 0;
 	int j = 0;
@@ -496,7 +546,7 @@ int commandHandler(char * args[])
 			}
 			else if (strcmp(args[i],"|") == 0)
 			{
-				pipeHandler(args);
+				HandlePipe(args);
 				return 1;
 			// Neu la '<', Input and Output redirection.
 			// Kiểm tra xem cấu trúc đã cho có đúng không, thi gọi phương thức thích hợp
@@ -504,21 +554,22 @@ int commandHandler(char * args[])
 			else if (strcmp(args[i],"<") == 0)
 			{
 				aux = i+1;
-				if (args[aux] == NULL || args[aux+1] == NULL || args[aux+2] == NULL )
+				if (args[aux] == NULL && args[aux+1] == NULL && args[aux+2] == NULL)
 				{
 					printf("Not enough input arguments\n");
 					return -1;
 				}
-				else
+				if (args[aux + 2] != NULL)
 				{
-					if (strcmp(args[aux+1],">") != 0)
-					{
-						printf("Usage: Expected '>' and found %s\n",args[aux+1]);
-						return -2;
-					}
+					fileIO(args_aux,args[i+1],args[i+3],1);
+					return 1;
 				}
-				fileIO(args_aux,args[i+1],args[i+3],1);
-				return 1;
+				if (args[aux] != NULL && args[aux + 1] == NULL)
+				{
+					fileIO(args_aux,args[i+1],NULL,2);
+					return 1;
+				}
+				return -2;
 			}
 			// Neu la '>', la output redirection.
 			// Kiểm tra xem cấu trúc đã cho có đúng không, thi gọi phương thức thích hợp
@@ -542,100 +593,4 @@ int commandHandler(char * args[])
 	}
 	
 	return 1;
-}
-
-
-/**
-* Hàm main
-*/ 
-int main(int argc, char *argv[])//, char ** envp) 
-{
-	char line[MAXLINE]; // buffer cho the user input
-	char * tokens[LIMIT]; // mảng các token trong command
-	int numTokens;
-		
-	no_reprint_prmpt = 0; 	//Ngăn chặn việc in các shell sau phương thức certain
-	pid = -10; // khởi tạo pid thành một pid không thể thực hiện được
-
-	//check value before adding to history
-	char* beforehistory = "";
-
-	// Gọi hàm khởi tạo và chào mừng
-	init();
-	//welcomeScreen();
-    
-   	// đặt char ** bên ngoài của mình thành môi trường để chúng tôi có thể xử lý nó sau này bằng các phương pháp khác
-	
-	// set shell=<pathname>/simple-c-shell as an environment variable for
-	// the child
-	setenv("shell",getcwd(currentDirectory, 1024),1);
-	
-	// Main loop, user input sẽ được đọc
-	// và lời nhắc sẽ được in
-	while(TRUE)
-	{
-		// in lời nhắc của shell nếu cần thiết
-		if (no_reprint_prmpt == 0) 
-			shellPrompt();
-		no_reprint_prmpt = 0;
-		
-		// làm rỗng line buffer ==> chèn 1024 \0 vào line, bắt đầu từ phần tử thứ nhất, đảm bảo chuỗi ban đầu là rỗng
-		memset ( line, '\0', MAXLINE );
-
-		// Chờ user input
-		fgets(line, MAXLINE, stdin);	//line da bao gom dau xuong dong
-		char* linetemp = (char*)malloc(strlen(line) + 1);
-		strcpy(linetemp,line);
-		
-		line[strlen(line) -1] = '\0';
-		
-		if(strcmp(line,"!!") == 0)
-		{
-			if(strcmp(beforehistory,"") == 0)
-			{
-				printf("No commands in history\n");
-			}
-			else
-			{
-				strcpy(line, beforehistory);
-				printf("%s", line);
-				
-			}
-		}
-
-		// Nếu không viết gì, vòng lặp chạy lại
-		if((tokens[0] = strtok(line," \n\t")) == NULL) continue;
-		
-		// Đọc tất cả tokens của input 
-		// Chuyển đến commandHandler làm đối số
-
-		numTokens = 1;
-		while((tokens[numTokens] = strtok(NULL, " \n\t")) != NULL) 
-		{
-			numTokens++;
-		}
-
-		if(strcmp(beforehistory, linetemp) != 0)
-		{
-			if(strcmp(linetemp, "!!\n") != 0)
-			{
-				beforehistory = (char*)malloc(strlen(linetemp));
-				strcpy(beforehistory, linetemp);
-				char* temp = (char*)malloc(strlen(history) + strlen(linetemp) + 1);
-				strcpy(temp, history);
-				//strcat(temp , "\n");
-				strcat(temp , linetemp);
-				history = (char*)malloc(strlen(temp) + 1);
-				strcpy(history, temp);
-			}
-
-			
-		}
-
-		
-		commandHandler(tokens);
-		
-	}          
-
-	exit(0);
 }

@@ -11,39 +11,36 @@
 #define TRUE 1
 #define FALSE !TRUE
 
+char* teamName = "That.Tung.Tuong";
+
 // Shell pid, pgid, terminal modes
 static pid_t GBSH_PID;
 static pid_t GBSH_PGID;
 static int GBSH_IS_INTERACTIVE;
 static struct termios GBSH_TMODES;
 
-static char* currentDirectory;
-//extern char** environ;
-
-struct sigaction act_child;
+struct sigaction act_chld;
 struct sigaction act_int;
+
+static char* currentDirectory;
 
 int no_reprint_prmpt;
 
 pid_t pid;
 
-
 char* history = "";
-char* teamName = "That.Tung.Tuong";
-
 
 int changeDirectory(char * args[]);
 
 void ShowHistory();
 
-void init();
+void Initiation();
 
-// signal handler for SIGCHLD 
-void signalHandler_child(int p);
-// signal handler for SIGINT
+void signalHandler_chld(int p);
+
 void signalHandler_int(int p);
 
-void shellPrompt();
+void Prompt();
 
 int changeDirectory(char* args[]);
 
@@ -51,6 +48,6 @@ void launchProg(char **args, int background);
 
 void fileIO(char * args[], char* inputFile, char* outputFile, int option);
 
-void pipeHandler(char * args[]);
+void HandlePipe(char * args[]);
 
-int commandHandler(char * args[]);
+int HandleCommand(char * args[]);
